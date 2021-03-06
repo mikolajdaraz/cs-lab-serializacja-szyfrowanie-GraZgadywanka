@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Runtime.Serialization;
+
 
 namespace GraZaDuzoZaMalo.Model
 {
@@ -14,7 +13,7 @@ namespace GraZaDuzoZaMalo.Model
     /// 1. Gra może być w jednym z 3 możliwych statusów: 
     /// <list type="bullet">
     /// <item>
-    /// <term><c>WTrakcie</c>
+    /// <term><c>W_Trakcie</c>
     /// </term>
     /// <description> - gracz jeszcze nie odgadł liczby, może podawać swoje propozycje, stan ustawiany w chwili utworzenia gry i może ulec zmianie jedynie w chwili odgadnięcia liczby lub jawnego przerwania gry,
     /// </description>
@@ -30,12 +29,12 @@ namespace GraZaDuzoZaMalo.Model
     /// </list>
     /// </para>
     /// <para>
-    /// W chwili utworzenia obiektu gry losowana jest wartość do odgadnięcia, ustawiany czas rozpoczecia gry oraz gra otrzymuje status <c>WTrakcie</c>.
+    /// W chwili utworzenia obiektu gry losowana jest wartość do odgadnięcia, ustawiany czas rozpoczecia gry oraz gra otrzymuje status <c>W_Trakcie</c>.
     /// </para>
     /// <para>
     /// Stan gry (w dowolnym momencie zycia obiektu gry) opisany jest przez:
     /// a) wylosowaną liczbę, którą należy odgadnąć,
-    /// b) status gry (WTrakcie, Zakonczona, Poddana),
+    /// b) status gry (W_Trakcie, Zakonczona, Poddana),
     /// c) historię ruchów graczagracz przerwał rozgrywke,  odgadującego (tzn. składane propozycje, czasy złożenia propozycji i odpowiedzi komputera).
     /// </para>
     /// <para>
@@ -45,6 +44,8 @@ namespace GraZaDuzoZaMalo.Model
     /// Pojedynczy Ruch
     /// </para>
     /// </remarks>
+    [Serializable]
+    [DataContract]
     public class Gra
     {
         /// <summary>
@@ -63,7 +64,7 @@ namespace GraZaDuzoZaMalo.Model
         /// </value>
         public int MinLiczbaDoOdgadniecia { get; } = 1;
 
-
+        [DataMember]
         readonly private int liczbaDoOdgadniecia;
 
 
@@ -73,24 +74,28 @@ namespace GraZaDuzoZaMalo.Model
         public enum Status
         {
             /// <summary>Status gry ustawiany w momencie utworzenia obiektu gry. Zmiana tego statusu mozliwa albo gdy liczba zostanie odgadnieta, albo jawnie przerwana przez gracza.</summary>
-            WTrakcie,
+            W_Trakcie,
+            /// <summary>Status gry ustawiany w momencie wstrzymywania gry</summary>
+            Zawieszona,
             /// <summary>Status gry ustawiany w momencie odgadnięcia poszukiwanej liczby.</summary>
             Zakonczona,
             /// <summary>Status gry ustawiany w momencie jawnego przerwania gry przez gracza.</summary>
             Poddana
+
         };
 
         /// <summary>
         /// Właściwość tylko do odczytu opisujaca aktualny status (<see cref="Status"/>) gry.
         /// </summary>
         /// <remarks>
-        /// <para>W momencie utworzenia obiektu, uruchomienia konstruktora, zmienna przyjmuje wartość <see cref="Gra.Status.WTrakcie"/>.</para>
+        /// <para>W momencie utworzenia obiektu, uruchomienia konstruktora, zmienna przyjmuje wartość <see cref="Gra.Status.W_Trakcie"/>.</para>
         /// <para>Zmiana wartości zmiennej na <see cref="Gra.Status.Poddana"/> po uruchomieniu metody <see cref="Przerwij"/>.</para>
         /// <para>Zmiana wartości zmiennej na <see cref="Gra.Status.Zakonczona"/> w metodzie <see cref="Propozycja(int)"/>, po podaniu poprawnej, odgadywanej liczby.</para>
         /// </remarks>
+        [DataMember]
         public Status StatusGry { get; private set; }
 
-
+        [DataMember]
         private List<Ruch> listaRuchow;
 
         public IReadOnlyList<Ruch> ListaRuchow { get { return listaRuchow.AsReadOnly(); } }
@@ -105,7 +110,7 @@ namespace GraZaDuzoZaMalo.Model
         /// Zwraca aktualny stan gry, od chwili jej utworzenia (wywołania konstruktora) do momentu wywołania tej własciwości.
         /// </summary>
         public TimeSpan AktualnyCzasGry => DateTime.Now - CzasRozpoczecia;
-        public TimeSpan CalkowityCzasGry => (StatusGry == Status.WTrakcie) ? AktualnyCzasGry : (TimeSpan)(CzasZakonczenia - CzasRozpoczecia);
+        public TimeSpan CalkowityCzasGry => (StatusGry == Status.W_Trakcie) ? AktualnyCzasGry : (TimeSpan)(CzasZakonczenia - CzasRozpoczecia);
 
         public Gra(int min, int max)
         {
@@ -118,7 +123,7 @@ namespace GraZaDuzoZaMalo.Model
             liczbaDoOdgadniecia = (new Random()).Next(MinLiczbaDoOdgadniecia, MaxLiczbaDoOdgadniecia + 1);
             CzasRozpoczecia = DateTime.Now;
             CzasZakonczenia = null;
-            StatusGry = Status.WTrakcie;
+            StatusGry = Status.W_Trakcie;
 
             listaRuchow = new List<Ruch>();
         }
@@ -147,24 +152,43 @@ namespace GraZaDuzoZaMalo.Model
                 odp = Odpowiedz.ZaDuzo;
 
             //dopisz do listy
-            if (StatusGry == Status.WTrakcie)
+            if (StatusGry == Status.W_Trakcie)
             {
-                listaRuchow.Add(new Ruch(pytanie, odp, Status.WTrakcie));
+                listaRuchow.Add(new Ruch(pytanie, odp, Status.W_Trakcie));
             }
 
             return odp;
         }
-
-        public int Przerwij()
+        public int Zawieszona()
         {
-            if (StatusGry == Status.WTrakcie)
+            if (StatusGry == Status.W_Trakcie)
             {
-                StatusGry = Status.Poddana;
+                StatusGry = Status.Zawieszona;
                 CzasZakonczenia = DateTime.Now;
-                listaRuchow.Add(new Ruch(null, null, Status.WTrakcie));
+                listaRuchow.Add(new Ruch(null, null, Status.Zawieszona));
             }
 
             return liczbaDoOdgadniecia;
+        }
+
+        public int Przerwij()
+        {
+            if (StatusGry == Status.W_Trakcie)
+            {
+                StatusGry = Status.Poddana;
+                CzasZakonczenia = DateTime.Now;
+                listaRuchow.Add(new Ruch(null, null, Status.Zakonczona));
+            }
+
+            return liczbaDoOdgadniecia;
+        }
+
+        public void Wznow()
+        {
+            if (StatusGry == Status.Zawieszona)
+            {
+                StatusGry = Status.W_Trakcie;
+            }
         }
 
 
@@ -176,6 +200,7 @@ namespace GraZaDuzoZaMalo.Model
             ZaDuzo = 1
         };
 
+        [Serializable]
         public class Ruch
         {
             public int? Liczba { get; }
@@ -196,7 +221,5 @@ namespace GraZaDuzoZaMalo.Model
                 return $"({Liczba}, {Wynik}, {Czas}, {StatusGry})";
             }
         }
-
-
     }
 }

@@ -2,29 +2,32 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text;
-using System.Threading.Tasks;
 using GraZaDuzoZaMalo.Model;
 using static GraZaDuzoZaMalo.Model.Gra.Odpowiedz;
+using TimersTimer = System.Timers.Timer;
+using System.Threading;
+
 
 namespace AppGraZaDuzoZaMaloCLI
 {
-    public class KontrolerCLI
+    public class KontrolerCLIZapisWLocie
     {
         public const char ZNAK_ZAKONCZENIA_GRY = 'X';
 
         private Gra gra;
+        private ZapiszGre zapiszGre = new SerializajcaBitowa();
         private WidokCLI widok;
 
         public int MinZakres { get; private set; } = 1;
         public int MaxZakres { get; private set; } = 100;
 
-        public IReadOnlyList<Gra.Ruch> ListaRuchow {
+        public IReadOnlyList<Gra.Ruch> ListaRuchow
+        {
             get
-            { return gra.ListaRuchow;  }
- }
+            { return gra.ListaRuchow; }
+        }
 
-        public KontrolerCLI()
+        public KontrolerCLIZapisWLocie()
         {
             gra = new Gra();
             widok = new WidokCLI(this);
@@ -33,7 +36,7 @@ namespace AppGraZaDuzoZaMaloCLI
         public void Uruchom()
         {
             widok.OpisGry();
-            while( widok.ChceszKontynuowac("Czy chcesz kontynuować aplikację (t/n)? ") )
+            while (widok.ChceszKontynuowac("Czy chcesz kontynuować aplikację (t/n)? "))
                 UruchomRozgrywke();
         }
 
@@ -42,9 +45,36 @@ namespace AppGraZaDuzoZaMaloCLI
             widok.CzyscEkran();
             // ustaw zakres do losowania
 
+            if (zapiszGre.zapisDostepny && widok.ChceszKontynuowac("Czy chcesz wczytać poprzednią rozgrywkę? (t/n)"))
+            {
+                try
+                {
+                    gra = zapiszGre.WczytajGre();
+                    gra.Wznow();
+                    zapiszGre.SerializacjaGry(gra);
+                    widok.HistoriaGry();
+                }
+                catch (SerializationException)
+                {
+                    Console.WriteLine("Zapis gry uszkodzony!");
+                    gra = new Gra(MinZakres, MaxZakres);
+                    zapiszGre.UsunZapis();
+                }
+            }
+            else
+            {
+                gra = new Gra(MinZakres, MaxZakres); //może zgłosić ArgumentException
+                zapiszGre.UsunZapis();
+            }
 
-            gra = new Gra(MinZakres, MaxZakres); //może zgłosić ArgumentException
 
+
+            //////////////////////////////////////////////////////////Zapis podczas trwania gry
+
+
+            var timer = new TimersTimer(1000);
+            timer.Elapsed += (s, e) => zapiszGre.SerializacjaGry(gra);
+            timer.Start();
             do
             {
                 //wczytaj propozycję
@@ -53,9 +83,19 @@ namespace AppGraZaDuzoZaMaloCLI
                 {
                     propozycja = widok.WczytajPropozycje();
                 }
-                catch( KoniecGryException)
+                catch (KoniecGryException)
                 {
-                    gra.Przerwij();
+                    gra.Zawieszona();
+                    try
+                    {
+                        zapiszGre.SerializacjaGry(gra);
+                        Console.WriteLine("Gra Zapisana!");
+                    }
+                    catch (SerializationException)
+                    {
+                        Console.WriteLine("Zapis gry uszkodzony!");
+                    }
+                    Environment.Exit(0);
                 }
 
                 Console.WriteLine(propozycja);
@@ -64,7 +104,7 @@ namespace AppGraZaDuzoZaMaloCLI
 
                 //Console.WriteLine( gra.Ocena(propozycja) );
                 //oceń propozycję, break
-                switch( gra.Ocena(propozycja) )
+                switch (gra.Ocena(propozycja))
                 {
                     case ZaDuzo:
                         widok.KomunikatZaDuzo();
@@ -80,10 +120,18 @@ namespace AppGraZaDuzoZaMaloCLI
                 }
                 widok.HistoriaGry();
             }
-            while (gra.StatusGry == Gra.Status.WTrakcie);
-                      
+            while (gra.StatusGry == Gra.Status.W_Trakcie);
+            timer.Stop();
+
             //if StatusGry == Przerwana wypisz poprawną odpowiedź
             //if StatusGry == Zakończona wypisz statystyki gry
+
+            if (gra.StatusGry == Gra.Status.Zakonczona)
+            {
+                zapiszGre.UsunZapis();
+                Console.WriteLine("\nHistoria Gry\n");
+                widok.HistoriaGry();
+            }
         }
 
         ///////////////////////
@@ -103,7 +151,7 @@ namespace AppGraZaDuzoZaMaloCLI
             gra = null;
             widok.CzyscEkran(); //komunikat o końcu gry
             widok = null;
-            System.Environment.Exit(0);
+            Environment.Exit(0);
         }
 
         public void ZakonczRozgrywke()
@@ -120,13 +168,13 @@ namespace AppGraZaDuzoZaMaloCLI
         /// <exception cref="FormatException"></exception>
         /// <exception cref="OverflowException"></exception>
         /// <returns></returns>
-        public int WczytajLiczbeLubKoniec(string value, int defaultValue )
+        public int WczytajLiczbeLubKoniec(string value, int defaultValue)
         {
-            if( string.IsNullOrEmpty(value) )
+            if (string.IsNullOrEmpty(value))
                 return defaultValue;
 
             value = value.TrimStart().ToUpper();
-            if ( value.Length>0 && value[0].Equals(ZNAK_ZAKONCZENIA_GRY))
+            if (value.Length > 0 && value[0].Equals(ZNAK_ZAKONCZENIA_GRY))
                 throw new KoniecGryException();
 
             //UWAGA: ponizej może zostać zgłoszony wyjątek 

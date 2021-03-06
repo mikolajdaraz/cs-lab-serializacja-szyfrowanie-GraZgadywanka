@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using static System.Console;
 
 namespace AppGraZaDuzoZaMaloCLI
@@ -11,9 +7,9 @@ namespace AppGraZaDuzoZaMaloCLI
     {
         public const char ZNAK_ZAKONCZENIA_GRY = 'X';
 
-        private KontrolerCLI kontroler;
+        private KontrolerCLIZapisWLocie kontroler;
 
-        public WidokCLI(KontrolerCLI kontroler) => this.kontroler = kontroler;
+        public WidokCLI(KontrolerCLIZapisWLocie kontroler) => this.kontroler = kontroler;
 
         public void CzyscEkran() => Clear();
 
@@ -25,14 +21,14 @@ namespace AppGraZaDuzoZaMaloCLI
             bool sukces = false;
             while (!sukces)
             {
-                Write("Podaj swoją propozycję (lub " + KontrolerCLI.ZNAK_ZAKONCZENIA_GRY + " aby przerwać): ");
+                Write("Podaj swoją propozycję (lub " + KontrolerCLIZapisWLocie.ZNAK_ZAKONCZENIA_GRY + " aby przerwać): ");
                 try
                 {
                     string value = ReadLine().TrimStart().ToUpper();
                     if (value.Length > 0 && value[0].Equals(ZNAK_ZAKONCZENIA_GRY))
                         throw new KoniecGryException();
 
-                    //UWAGA: ponizej może zostać zgłoszony wyjątek 
+                    //UWAGA: poniszej może zostać zgłoszony wyjątek 
                     wynik = Int32.Parse(value);
                     sukces = true;
                 }
@@ -45,6 +41,11 @@ namespace AppGraZaDuzoZaMaloCLI
                 {
                     WriteLine("Przesadziłeś. Podana przez Ciebie wartość jest zła! Spróbuj raz jeszcze.");
                     continue;
+                }
+                catch (KoniecGryException quit)
+                {
+                    WriteLine("Zakończyłeś grę!");
+                    throw quit;
                 }
                 catch (Exception)
                 {
@@ -61,12 +62,12 @@ namespace AppGraZaDuzoZaMaloCLI
                 + "Twoimm zadaniem jest odgadnąć liczbę, którą wylosował komputer." + Environment.NewLine + "Na twoje propozycje komputer odpowiada: za dużo, za mało albo trafiłeś");
         }
 
-        public bool ChceszKontynuowac( string prompt )
+        public bool ChceszKontynuowac(string prompt)
         {
-                Write( prompt );
-                char odp = ReadKey().KeyChar;
-                WriteLine();
-                return (odp == 't' || odp == 'T');
+            Write(prompt);
+            char odp = ReadKey().KeyChar;
+            WriteLine();
+            return (odp == 't' || odp == 'T');
         }
 
         public void HistoriaGry()
@@ -80,10 +81,19 @@ namespace AppGraZaDuzoZaMaloCLI
             WriteLine("Nr    Propozycja     Odpowiedź     Czas    Status");
             WriteLine("=================================================");
             int i = 1;
-            foreach ( var ruch in kontroler.ListaRuchow)
+
+            foreach (var ruch in kontroler.ListaRuchow)
             {
-                WriteLine($"{i}     {ruch.Liczba}      {ruch.Wynik}  {ruch.Czas.Second}   {ruch.StatusGry}");
-                i++;
+                if (i < 10)
+                {
+                    WriteLine($"{i}         {ruch.Liczba}            {ruch.Wynik}      {ruch.Czas.Second}       {ruch.StatusGry}");
+                    i++;
+                }
+                else
+                {
+                    WriteLine($"{i}        {ruch.Liczba}            {ruch.Wynik}      {ruch.Czas.Second}       {ruch.StatusGry}");
+                    i++;
+                }
             }
         }
 
